@@ -4,9 +4,23 @@ import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.List;
 
 public class Main {
     public static void main(String[] args) throws IOException {
+
+        PatientRegistry registry = new PatientRegistry();
+
+        CsvPatientLoader csvPatientLoader = new CsvPatientLoader("data/patients.csv");
+        List<Patient> loadedPatients = csvPatientLoader.loadPatients();
+        for (Patient patient : loadedPatients){
+            try {
+                registry.addPatient(patient);
+            } catch (DuplicatePatientException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+
         // Create an HTTP server listening on localhost:8080
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 8080), 0);
 
@@ -16,6 +30,41 @@ public class Main {
             exchange.getResponseHeaders().set("Content-Type", "text/plain");
             exchange.sendResponseHeaders(200, response.getBytes().length);
             exchange.getResponseBody().write(response.getBytes());
+            exchange.close();
+        });
+
+        server.createContext("/api/patient", exchange -> {
+            String query = exchange.getRequestURI().getQuery();
+
+            if (query == null || !query.contains("nhs_number=")) {
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
+                return;
+            }
+
+            String nhsNumberString = query.split("=")[1];
+            NhsNumber nhsNumber = null;
+            try {
+                nhsNumber = new NhsNumber(nhsNumberString);
+            } catch (InvalidNHSNumberException e) {
+                // throw new RuntimeException(e);
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
+                return;
+            }
+            Patient patient = registry.findByNhsNumber(nhsNumber);
+
+            if (patient == null) {
+                exchange.sendResponseHeaders(404, 0);
+                exchange.close();
+                return;
+            }
+
+            PatientFhirJsonBuilder patientFhirJsonBuilder = new PatientFhirJsonBuilder(patient);
+            String jsonResponse = patientFhirJsonBuilder.buildPatientFhirJson();
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, jsonResponse.getBytes().length);
+            exchange.getResponseBody().write(jsonResponse.getBytes());
             exchange.close();
         });
 
