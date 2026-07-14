@@ -38,8 +38,7 @@ public class Main {
             String query = exchange.getRequestURI().getQuery();
 
             if (query == null || !query.contains("nhs_number=")) {
-                exchange.sendResponseHeaders(400, 0);
-                exchange.close();
+                sendErrorResponse(exchange, 400, "Missing required parameter: nhs_number");
                 return;
             }
 
@@ -48,16 +47,13 @@ public class Main {
             try {
                 nhsNumber = new NhsNumber(nhsNumberString);
             } catch (InvalidNHSNumberException e) {
-                // throw new RuntimeException(e);
-                exchange.sendResponseHeaders(400, 0);
-                exchange.close();
+                sendErrorResponse(exchange, 400, "Invalid NHS number format");
                 return;
             }
             Patient patient = registry.findByNhsNumber(nhsNumber);
 
             if (patient == null) {
-                exchange.sendResponseHeaders(404, 0);
-                exchange.close();
+                sendErrorResponse(exchange, 404, "Patient not found");
                 return;
             }
 
@@ -96,5 +92,13 @@ public class Main {
         // Start the server
         server.start();
         System.out.println("Server started on http://localhost:8080");
+    }
+
+    private static void sendErrorResponse(HttpExchange exchange, int status, String message) throws IOException {
+        String jsonErrorBody = "{ \"error\": \"" + message + "\"}";
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(status, jsonErrorBody.getBytes().length);
+        exchange.getResponseBody().write(jsonErrorBody.getBytes());
+        exchange.close();
     }
 }
