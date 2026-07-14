@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Main {
@@ -65,6 +66,30 @@ public class Main {
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, jsonResponse.getBytes().length);
             exchange.getResponseBody().write(jsonResponse.getBytes());
+            exchange.close();
+        });
+
+        server.createContext("/api/patients", exchange -> {
+            ArrayList<Patient>  patientsArrayList =  registry.getAllPatients();
+            String patientsJsonString;
+
+            if (!patientsArrayList.isEmpty()) {
+                StringBuilder patientsJson = new StringBuilder("[ ");
+
+                for (Patient patient : patientsArrayList){
+                    PatientFhirJsonBuilder patientFhirJsonBuilder = new PatientFhirJsonBuilder(patient);
+                    patientsJson.append(patientFhirJsonBuilder.buildPatientFhirJson()).append(", ");
+                }
+                patientsJson.setLength(patientsJson.length() - 2);
+                patientsJson.append(" ]");
+                patientsJsonString = patientsJson.toString();
+            } else {
+                patientsJsonString = "[]";
+            }
+
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, patientsJsonString.getBytes().length);
+            exchange.getResponseBody().write(patientsJsonString.getBytes());
             exchange.close();
         });
 
